@@ -22,11 +22,11 @@ public class NumberConverter {
 
     private String convertNumber() {
         if (this.sourceBase == this.targetBase) {
-            return String.valueOf(this.number);
+            return this.number;
         }
 
-        final int BASE10 = 10;
-        final String numberBase10 = this.sourceBase != BASE10 ? convertToBase10() : String.valueOf(this.number);
+        final int BASE_10 = 10;
+        final String numberBase10 = this.sourceBase != BASE_10 ? convertToBase10() : this.number;
 
         return convertFromBase10(numberBase10);
     }
@@ -89,13 +89,15 @@ public class NumberConverter {
 
     private String convertFromBase10(String numberBase10) {
         final String[] numberPartsBase10 = numberBase10.split("\\.");
+        final boolean isDecimal = numberPartsBase10.length == 2;
+
+        String integerPart = numberPartsBase10[0];
+        String decimalPart = isDecimal ? numberPartsBase10[1] : null;
 
         final StringBuilder numberBuilder = new StringBuilder();
-        String decimalPart = null;
-        boolean carryover = false;
-        final boolean isDecimal = numberPartsBase10.length == 2;
         if (isDecimal) {
-            carryover = convertDecimalPartFromBase10(numberPartsBase10[1]);
+            convertDecimalPartFromBase10(decimalPart);
+            integerPart = roundNumber(integerPart);
 
             numberBuilder.append(".");
             for (Character digit : convertedNumberBuilder) {
@@ -106,12 +108,7 @@ public class NumberConverter {
             numberBuilder.delete(0, numberBuilder.length());
         }
 
-        if (carryover) {
-            BigInteger integerPartBase10 = new BigInteger(numberPartsBase10[0]).add(BigInteger.ONE);
-            numberPartsBase10[0] = integerPartBase10.toString();
-        }
-
-        convertIntegerPartFromBase10(numberPartsBase10[0]);
+        convertIntegerPartFromBase10(integerPart);
 
         for (Character character : convertedNumberBuilder) {
             numberBuilder.append(character);
@@ -124,7 +121,7 @@ public class NumberConverter {
         return numberBuilder.toString();
     }
 
-    private boolean convertDecimalPartFromBase10(String decimalPartBase10) {
+    private void convertDecimalPartFromBase10(String decimalPartBase10) {
         convertedNumberBuilder.clear();
 
         final char[] decimalDigits = decimalPartBase10.toCharArray();
@@ -142,15 +139,20 @@ public class NumberConverter {
         fractionalPart = fractionalPart.multiply(BigDecimal.valueOf(this.targetBase));
         BigDecimal integerRemainder = fractionalPart.setScale(0, RoundingMode.FLOOR);
         boolean isFinished = false;
-        final int UPPER_SCALE_LIMIT = 6;
-        while (!isFinished && convertedNumberBuilder.size() < UPPER_SCALE_LIMIT) {
+        final int UPPER_SCALE_LIMIT = 5;
+
+        while (!isFinished && convertedNumberBuilder.size() < UPPER_SCALE_LIMIT + 1) {
             BigDecimal subtraction = integerRemainder.subtract(fractionalPart);
-            if (subtraction.compareTo(BigDecimal.ZERO) == 0) {
+            final boolean isDecimalPartZero = subtraction.compareTo(BigDecimal.ZERO) == 0;
+            if (isDecimalPartZero) {
                 isFinished = true;
             }
-            if (!(fractionalPart.compareTo(BigDecimal.ONE) <= 0)) {
+
+            final boolean isFractionalPartGreaterEqualsToOne = !(fractionalPart.compareTo(BigDecimal.ONE) < 0);
+            if (isFractionalPartGreaterEqualsToOne) {
                 fractionalPart = fractionalPart.subtract(integerRemainder);
             }
+
             convertedNumberBuilder.add(
                     Character.toUpperCase(
                             Character.forDigit(Integer.parseInt(integerRemainder.toString()), this.targetBase)
@@ -159,38 +161,45 @@ public class NumberConverter {
 
             fractionalPart = fractionalPart.multiply(BigDecimal.valueOf(this.targetBase));
             integerRemainder = fractionalPart.setScale(0, RoundingMode.FLOOR);
-
         }
 
+        while (convertedNumberBuilder.size() < UPPER_SCALE_LIMIT) {
+            convertedNumberBuilder.add('0');
+        }
+    }
+
+    private String roundNumber(String integerPart) {
+        final int UPPER_SCALE_LIMIT = 6;
+        boolean carryover = false;
         if (convertedNumberBuilder.size() == UPPER_SCALE_LIMIT) {
             int index = convertedNumberBuilder.size() - 1;
             int indexDigit = Character.digit(convertedNumberBuilder.get(index), this.targetBase);
             while (indexDigit + 1 >= this.targetBase) {
                 convertedNumberBuilder.set(index, '0');
                 --index;
-                if (index < 0) {
-                    convertedNumberBuilder.removeLast();
-                    return true;
+                if (index >= 0) {
+                    indexDigit = Character.digit(convertedNumberBuilder.get(index), this.targetBase);
+                } else {
+                    carryover = true;
                 }
-                indexDigit = Character.digit(convertedNumberBuilder.get(index), this.targetBase);
             }
 
             convertedNumberBuilder.removeLast();
             if (index == convertedNumberBuilder.size()) {
                 --index;
             }
-            if (index != convertedNumberBuilder.size() - 1 || indexDigit >= this.targetBase / 2) {
+            if (indexDigit >= this.targetBase / 2) {
                 convertedNumberBuilder.set(index,
                         Character.toUpperCase(Character.forDigit(++indexDigit, this.targetBase))
                 );
             }
         }
 
-        while (convertedNumberBuilder.size() < UPPER_SCALE_LIMIT - 1) {
-            convertedNumberBuilder.add('0');
+        if (carryover) {
+            return new BigInteger(integerPart).add(BigInteger.ONE).toString();
         }
 
-        return false;
+        return integerPart;
     }
 
     private void convertIntegerPartFromBase10(String integerPartBase10) {

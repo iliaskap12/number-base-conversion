@@ -26,8 +26,7 @@ public class Main {
 
                             switch (option) {
                                 case NUMBER:
-                                    final String number = input.split(" ")[0];
-                                    NumberConverter numberConverter = new NumberConverter(number, sourceBase, targetBase);
+                                    NumberConverter numberConverter = new NumberConverter(input, sourceBase, targetBase);
                                     System.out.printf("Conversion result: %s%n%n", numberConverter.getConvertedNumber());
                                     break;
                                 case BACK:
